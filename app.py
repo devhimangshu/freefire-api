@@ -1,15 +1,24 @@
 # app.py
 
+print("STEP 1: Starting app import...")
+
 from fastapi import FastAPI
 from pydantic import BaseModel
 import httpx
 import json
 import random
 
+print("STEP 2: Imports basic done")
+
 from get_jwt import create_jwt
+print("STEP 3: get_jwt loaded")
+
 from encrypt_like_body import create_like_payload
+print("STEP 4: encrypt_like_body loaded")
 
 app = FastAPI()
+
+print("STEP 5: FastAPI app created")
 
 
 # -------- Request Model --------
@@ -44,6 +53,8 @@ async def send_like(data: LikeRequest):
     try:
         guest = get_random_guest()
 
+        print(f"Using guest: {guest['uid']}")
+
         # Step 1 → JWT
         jwt, guest_region, _ = await create_jwt(
             guest["uid"],
@@ -56,7 +67,7 @@ async def send_like(data: LikeRequest):
         headers = {
             "User-Agent": "Dalvik/2.1.0",
             "Content-Type": "application/octet-stream",
-            "Authorization": jwt,   # ✅ FIXED (no double Bearer)
+            "Authorization": jwt,  # fixed
             "X-Unity-Version": "2018.4.11f1",
             "ReleaseVersion": "OB50",
         }
@@ -73,6 +84,7 @@ async def send_like(data: LikeRequest):
         }
 
     except Exception as e:
+        print("ERROR:", str(e))
         return {"error": str(e)}
 
 
