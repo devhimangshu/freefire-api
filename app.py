@@ -25,6 +25,13 @@ def home():
     return {"status": "API running"}
 
 
+@app.get("/guest-count")
+def guest_count():
+    with open("guests.json") as f:
+        guests = json.load(f)
+    return {"total_guests": len(guests)}
+
+
 @app.post("/send-like")
 async def send_like(data: LikeRequest):
     try:
@@ -34,23 +41,21 @@ async def send_like(data: LikeRequest):
         with open("guests.json") as f:
             guests = json.load(f)
 
-        max_likes = min(220, len(guests))  # limit 220
+        max_likes = min(220, len(guests))
+
         success = 0
         failed = 0
 
         async with httpx.AsyncClient(timeout=10) as client:
-
             for i in range(max_likes):
                 guest = guests[i]
 
                 try:
-                    # Step 1: JWT
                     jwt, guest_region, _ = await create_jwt(
                         guest["uid"],
                         guest["password"]
                     )
 
-                    # Step 2: Payload
                     payload = create_like_payload(
                         data.target_uid,
                         guest_region
@@ -73,7 +78,6 @@ async def send_like(data: LikeRequest):
                     else:
                         failed += 1
 
-                    # 🔥 IMPORTANT DELAY (avoid ban)
                     await asyncio.sleep(0.3)
 
                 except:
