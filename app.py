@@ -1,21 +1,17 @@
-# app.py
-
 from fastapi import FastAPI
 from pydantic import BaseModel
 import httpx
 import json
-import random
+import asyncio
 
 app = FastAPI()
 
 
-# -------- Request Model --------
 class LikeRequest(BaseModel):
     region: str
     target_uid: str
 
 
-# -------- Helpers --------
 def get_base_url(region: str):
     if region == "IND":
         return "https://client.ind.freefiremobile.com"
@@ -24,61 +20,70 @@ def get_base_url(region: str):
     return "https://clientbp.ggblueshark.com"
 
 
-def get_random_guest():
-    with open("guests.json") as f:
-        guests = json.load(f)
-    return random.choice(guests)
-
-
-# -------- Routes --------
 @app.get("/")
 def home():
-    return {"status": "API running ✅"}
+    return {"status": "API running"}
 
 
 @app.post("/send-like")
 async def send_like(data: LikeRequest):
     try:
-        # 🔥 IMPORT INSIDE FUNCTION (prevents startup crash)
         from get_jwt import create_jwt
         from encrypt_like_body import create_like_payload
 
-        guest = get_random_guest()
+        with open("guests.json") as f:
+            guests = json.load(f)
 
-        # Step 1 → JWT
-        jwt, guest_region, _ = await create_jwt(
-            guest["uid"],
-            guest["password"]
-        )
+        max_likes = min(220, len(guests))  # limit 220
+        success = 0
+        failed = 0
 
-        # Step 2 → payload
-        payload = create_like_payload(data.target_uid, guest_region)
+        async with httpx.AsyncClient(timeout=10) as client:
 
-        headers = {
-            "User-Agent": "Dalvik/2.1.0",
-            "Content-Type": "application/octet-stream",
-            "Authorization": jwt,
-            "X-Unity-Version": "2018.4.11f1",
-            "ReleaseVersion": "OB50",
-        }
+            for i in range(max_likes):
+                guest = guests[i]
 
-        url = f"{get_base_url(data.region)}/LikeProfile"
+                try:
+                    # Step 1: JWT
+                    jwt, guest_region, _ = await create_jwt(
+                        guest["uid"],
+                        guest["password"]
+                    )
 
-        async with httpx.AsyncClient(timeout=15) as client:
-            res = await client.post(url, data=payload, headers=headers)
+                    # Step 2: Payload
+                    payload = create_like_payload(
+                        data.target_uid,
+                        guest_region
+                    )
+
+                    headers = {
+                        "User-Agent": "Dalvik/2.1.0",
+                        "Content-Type": "application/octet-stream",
+                        "Authorization": jwt,
+                        "X-Unity-Version": "2018.4.11f1",
+                        "ReleaseVersion": "OB50",
+                    }
+
+                    url = f"{get_base_url(data.region)}/LikeProfile"
+
+                    res = await client.post(url, data=payload, headers=headers)
+
+                    if res.status_code == 200:
+                        success += 1
+                    else:
+                        failed += 1
+
+                    # 🔥 IMPORTANT DELAY (avoid ban)
+                    await asyncio.sleep(0.3)
+
+                except:
+                    failed += 1
 
         return {
-            "status": res.status_code,
-            "guest_uid": guest["uid"],
-            "message": "like sent"
+            "requested": max_likes,
+            "success": success,
+            "failed": failed
         }
 
     except Exception as e:
         return {"error": str(e)}
-
-
-@app.get("/guest-count")
-def guest_count():
-    with open("guests.json") as f:
-        guests = json.load(f)
-    return {"total_guests": len(guests)}
