@@ -1,5 +1,5 @@
 httpx
-protobuf==4.25.3
-pycryptodome
 fastapi
 uvicorn
+pycryptodome
+protobuf==4.25.3
